@@ -1,0 +1,6 @@
+# Downloaded training datasets
+data/*.parquet
+
+# Local Python environment and caches
+.venv/
+__pycache__/

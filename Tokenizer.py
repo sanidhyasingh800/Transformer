@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 import string
 from dataloader import create_dataloader
@@ -158,12 +157,56 @@ class Tokenizer:
 
             self.tokenized_stories = updated_stories
 
+    def tokenize(self, text: str) -> list[str]:
+        # after loading, we can use this function to tokenize new input
+
+        # safety check added by codex
+        if not self.merges or len(self.vocab) == 0:
+            raise RuntimeError(
+                "Tokenizer is not loaded. Call load_tokenizer() first."
+            )
+
+        # Start with character-level tokens.
+        tokens = list(text)
+
+        # Apply each learned merge in its original order.
+        for left_token, right_token in self.merges:
+            merged_token = left_token + right_token
+            updated_tokens: list[str] = []
+
+            index = 0
+
+            while index < len(tokens):
+                pair_matches = (
+                    index + 1 < len(tokens)
+                    and tokens[index] == left_token
+                    and tokens[index + 1] == right_token
+                )
+
+                if pair_matches:
+                    updated_tokens.append(merged_token)
+                    index += 2
+                else:
+                    updated_tokens.append(tokens[index])
+                    index += 1
+
+            tokens = updated_tokens
+
+        return ["<BOS>", *tokens, "<EOS>"]
+
+
+    def tokens_to_ids(self, tokens: np.ndarray) -> np.ndarray:
+        return np.array([self.token_to_id_lookup[str(token)] for token in tokens],dtype=np.int64)
+
+
+    def ids_to_tokens(self, token_ids: np.ndarray) -> np.ndarray:
+        return self.ordered_vocab[token_ids]
 
 
 
     # we save numpy arrays of the sorted vocab and merge tuples
     # we also construct the lookup tables but do not save them
-    def save_tokenizer(self):
+    def save_tokenizer(self) -> None:
         self.vocab_path.parent.mkdir(parents=True,exist_ok=True)
         self.merge_path.parent.mkdir(parents=True,exist_ok=True)
 
@@ -193,6 +236,7 @@ class Tokenizer:
             f"Saved {len(self.merges):,} merge rules "
             f"to {self.merge_path}"
         )
+    
 
     # we load in self.ordered_vocab and self.merges
     # from there we setup self.vocab and the lookup tables
@@ -237,9 +281,4 @@ class Tokenizer:
         return self.ordered_vocab, merges_array
 
 
-tokenizer = Tokenizer(dataset_size=500000, vocab_size=10000)
 
-tokenizer.create_vocab()
-
-loaded_vocab = tokenizer.load_tokenizer()
-print(loaded_vocab)
